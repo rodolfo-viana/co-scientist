@@ -1,0 +1,25 @@
+co-scientist skill for Claude Code
+
+This skill adapts material from OpenScientist
+(https://github.com/openscientist-io/openscientist), Copyright the
+OpenScientist authors, licensed under the Apache License, Version 2.0. A copy
+of that license is in LICENSES/OpenScientist-Apache-2.0.txt.
+
+Adapted material and changes:
+
+- references/methodology.md: adapted from skills/workflow/hypothesis-generation,
+  prioritization, result-interpretation and stopping-criteria. Rewritten for
+  ML and AI research; tests are pre-registered seeded experiments; a
+  non-significant result is classified as inconclusive instead of rejected.
+- references/writing-style.md: adapted from WRITING_STYLE in
+  src/openscientist/prompts/common.py. Shortened, examples changed.
+- scripts/cs_state.py: the citation snippet check (check_citation) follows
+  KnowledgeState.validate_citation in src/openscientist/knowledge_state.py,
+  extended to arbitrary literature records and an optional online check.
+  The hypothesis status model (pending, testing, supported, rejected) was
+  extended with review, duplicate and inconclusive states.
+
+The multi-agent design (generation, reflection, Elo tournament, evolution,
+meta-review) follows the description in Gottweis et al., "Accelerating
+scientific discovery with Co-Scientist", Nature 655, 487-496 (2026),
+doi:10.1038/s41586-026-10644-y. No code from that work was available or used.
