@@ -1,6 +1,6 @@
 ---
 name: co-scientist
-description: Multi-agent co-scientist for ML and AI research. Generates hypotheses for a research goal, reviews them against the literature, ranks them in an Elo tournament with position-swapped judging, evolves the best ones, and tests selected hypotheses with pre-registered seeded experiments and an adversarial audit. Use when the user types /co-scientist, asks to "rodar o co-scientist", "gerar hipóteses de pesquisa", "ranquear hipóteses", "testar hipóteses do co-scientist", or to continue, test or inspect an existing co-scientist run.
+description: Multi-agent co-scientist for ML and AI research. Generates hypotheses for a research goal, reviews them against the literature, ranks them in an Elo tournament with position-swapped judging, evolves the best ones, and tests selected hypotheses with pre-registered seeded experiments and an adversarial audit. Use when the user types /co-scientist, asks to run the co-scientist, to generate, rank or test research hypotheses (also in Portuguese, e.g. "rodar o co-scientist", "gerar hipóteses de pesquisa", "ranquear hipóteses", "testar hipóteses do co-scientist"), or to continue, test or inspect an existing co-scientist run.
 ---
 
 # Co-scientist
@@ -9,7 +9,8 @@ Invoking this skill is the user's request for multi-agent orchestration: it
 runs saved workflow scripts that spawn tens of agents per round. Before each
 workflow run, state the estimated number of agent calls in one line, then run
 it. `<skill>` below is the absolute path of the directory holding this file
-(normally `/home/rodolfo/.claude/skills/co-scientist`).
+(normally `~/.claude/skills/co-scientist`; expand `~` to the home directory
+before passing a path to a script or a workflow).
 
 The design follows the Co-Scientist paper (Gottweis et al., "Accelerating
 scientific discovery with Co-Scientist", Nature 655, 2026): generation,
@@ -28,8 +29,22 @@ is new: pre-registered experiments decided by a fixed statistical rule.
 | `/co-scientist status <run-dir>` | rebuild and show the ranking |
 
 Natural-language requests map to the same procedures. Talk to the user in
-Brazilian Portuguese; run files are written in English unless `config.json`
-sets `"language": "pt"`.
+their language; run files are written in English unless `config.json` sets
+`"language": "pt"` (Brazilian Portuguese).
+
+## Setup check
+
+- Every stage runs through the Workflow tool. If it is not available, stop and
+  tell the user that co-scientist needs a Claude Code version with dynamic
+  workflows, on a paid plan or with an API key, and that on Pro they are
+  turned on in `/config` (Dynamic workflows).
+- The plan critique and the verdict audit use the `co-scientist-critic`
+  subagent shipped in `<skill>/agents/`. Before preparing or running tests,
+  run `bash <skill>/install.sh --check`. If it reports the subagent missing or
+  outdated, tell the user, run `bash <skill>/install.sh` (it copies one file
+  into the `agents/` directory next to `skills/`) and check again. Claude Code
+  loads new subagent files without a restart; if the workflow still cannot
+  find the subagent, ask the user to restart Claude Code.
 
 ## New run
 
@@ -43,8 +58,8 @@ sets `"language": "pt"`.
 3. Write `<run>/goal.md` from the user's words, with these sections: Title;
    Research goal; Background and known work; Preferences (what kind of
    hypotheses); Constraints (data, compute, time; the local GPU is shown by
-   `nvidia-smi`, and the servers Marcos (1x32 GB) and Ada Lovelace (2x24 GB)
-   need approval); Evaluation criteria (default: alignment, plausibility,
+   `nvidia-smi`, and any remote server or cluster the user mentions needs
+   approval before use); Evaluation criteria (default: alignment, plausibility,
    novelty, testability, safety); Out of scope. Do not invent background. If
    something essential is missing (what counts as success, which compute),
    ask once; if the user told you to proceed on your own, write your choices
@@ -106,10 +121,13 @@ sets `"language": "pt"`.
    within the configured limits in this conversation, run the `ready` ones.
    - `ready`: Workflow `<skill>/workflows/run_tests.js` with args
      `{"runDir", "skillDir", "config", "items": [{"id": "H003"}], "env": {...}}`.
-   - `needs-server`: never automatic. After explicit approval, use the
-     `gpu-job` skill to run `tests/<id>/launch.sh` on a server, copy the
-     result files back into `tests/<id>/results/`, write `tests/<id>/run.json`
-     with `"where": "server"`, then run `run_tests.js` with
+   - `needs-server`: never automatic. After explicit approval, run
+     `tests/<id>/launch.sh` on the server the user chooses. If the user has a
+     skill for remote GPU jobs, use it; otherwise give the user the commands
+     to copy `tests/<id>/` to the server, run `launch.sh` there and copy the
+     results back, and wait until they say it is done. Then check that the
+     result files are in `tests/<id>/results/`, write `tests/<id>/run.json`
+     with `"where": "server"`, and run `run_tests.js` with
      `{"id": "<id>", "analyzeOnly": true}`.
    - `blocked`: report what is missing and ask.
 7. Rebuild and report each verdict with the paired difference, its 95% CI and
@@ -136,18 +154,17 @@ sets `"language": "pt"`.
   grows with the hypotheses carried over).
 - `tests`: `smoke_max_minutes`, `local_max_minutes_per_hypothesis`,
   `command_max_minutes` (keep below 10), `default_seeds`.
-- `models`: model and effort per role. Defaults follow the user's rules: Opus
-  with xhigh effort for reasoning and review roles, Sonnet xhigh for code.
-  Judge calls are about half of the agent calls in a round, so setting
-  `judge` to Sonnet is the cheapest way to lower the cost. The plan critique
-  and the verdict audit use the `revisor` agent.
+- `models`: model and effort per role. Defaults: Opus with xhigh effort for
+  reasoning and review roles, Sonnet xhigh for code. Judge calls are about
+  half of the agent calls in a round, so setting `judge` to Sonnet is the
+  cheapest way to lower the cost. The plan critique and the verdict audit use
+  the `co-scientist-critic` subagent, whose file sets `model: inherit`.
 - `wandb`: experiments log to W&B when enabled and `wandb` is importable;
   keys stay out of the run (offline mode if not logged in).
 
 ## Measured cost
 
-One data point, from the smoke run of 2026-11-23 with Sonnet in every role
-(run `~/co-scientist-runs/20261123-0114-smoke-labelnoise-l2`):
+One data point, from a smoke run on 2026-11-23 with Sonnet in every role:
 
 | Stage | Agent calls | Subagent tokens | Wall time |
 |---|---|---|---|
@@ -155,9 +172,7 @@ One data point, from the smoke run of 2026-11-23 with Sonnet in every role
 | Prepare one test | 4 | 0.38 M | 21 min |
 | Run, analyze and audit one test | 4 | 0.37 M | 6 min |
 
-First real run, 2026-11-23, default configuration (Opus xhigh), goal "weight
-editing of trained 2D U-Nets" (run
-`~/co-scientist-runs/20261123-0928-weight-editing-medseg`):
+First real run, 2026-11-23, default configuration (Opus xhigh):
 
 | Stage | Agent calls | Subagent tokens | Wall time |
 |---|---|---|---|
@@ -191,7 +206,8 @@ OpenAlex and arXiv serve the arXiv one. Check the source the record names in
 
 `scripts/cs_state.py` (state, Elo, citation checks), `scripts/seed_stats.py`
 (statistics and decision rule), `workflows/` (ideate, prepare_tests,
-run_tests), `roles/` (one file per agent role), `references/` (file formats,
-literature, methodology, writing style), `tests/` (pytest and
+run_tests), `roles/` (one file per agent role), `agents/` (the
+`co-scientist-critic` subagent, installed by `install.sh`), `references/`
+(file formats, literature, methodology, writing style), `tests/` (pytest and
 `node tests/mock_workflows.mjs`, an offline run of all three workflows with
 fake agents).

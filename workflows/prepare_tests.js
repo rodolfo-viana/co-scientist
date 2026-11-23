@@ -4,7 +4,7 @@ export const meta = {
   whenToUse: 'Called by the /co-scientist skill after the scientist picks hypotheses to test',
   phases: [
     { title: 'Design', detail: 'pre-registered plan per hypothesis' },
-    { title: 'Critique', detail: 'adversarial review of the plan (revisor), then one revision' },
+    { title: 'Critique', detail: 'adversarial review of the plan (co-scientist-critic), then one revision' },
     { title: 'Implement', detail: 'code, launch script and a smoke run; no package installs' },
   ],
 }
@@ -21,6 +21,8 @@ const T = Object.assign(
   CFG.tests || {},
 )
 const MODELS = CFG.models || {}
+// Subagent shipped in agents/ and installed by install.sh.
+const CRITIC_AGENT = 'co-scientist-critic'
 const WANDB = CFG.wandb || { enabled: false }
 const LANG = CFG.language === 'pt' ? 'Brazilian Portuguese' : 'English'
 const ENV = args.env
@@ -106,7 +108,7 @@ async function critiqueAndRevise(d, id) {
       `Compute available: ${COMPUTE.join(' ')}`,
       'Set ok to false only if there is at least one must-fix item. Write the field contents in English.',
     ].join('\n'),
-    { label: `critique:${id}`, phase: 'Critique', schema: CRITIQUE_SCHEMA, agentType: 'revisor' },
+    { label: `critique:${id}`, phase: 'Critique', schema: CRITIQUE_SCHEMA, agentType: CRITIC_AGENT },
   )
   if (!crit) {
     log(`${id}: critique failed; plan kept as designed`)

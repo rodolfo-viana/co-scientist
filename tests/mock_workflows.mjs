@@ -116,7 +116,7 @@ async function fakeAgent(prompt, opts) {
       return { tier: 'local', design: 'paired-two-arm', primary_metric: 'acc', direction: 'higher', min_effect: 0.01, n_seeds: 5, est_minutes: 3, needs_gpu: false }
     }
     case 'critique':
-      assert.equal(opts.agentType, 'revisor')
+      assert.equal(opts.agentType, 'co-scientist-critic')
       return num(rest) % 2 === 0 ? { ok: false, must_fix: ['more seeds'], should_fix: [] } : { ok: true, must_fix: [], should_fix: [] }
     case 'implement':
       write(`tests/${rest}/prepare.json`, { id: rest, smoke_ok: true, blocked_reason: null, est_minutes_full: 3, needs_gpu: false, gpu_mem_gb: 0, packages_missing: [] })
@@ -140,7 +140,7 @@ async function fakeAgent(prompt, opts) {
       return { rule_decision: stats.rule_decision, verdict: stats.rule_decision, summary: 's' }
     }
     case 'audit':
-      assert.equal(opts.agentType, 'revisor')
+      assert.equal(opts.agentType, 'co-scientist-critic')
       return { verdict_holds: true, downgrade: false, issues: [] }
     case 'record': {
       const draft = read(`tests/${rest}/verdict.draft.json`)

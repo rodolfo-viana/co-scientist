@@ -5,7 +5,7 @@ export const meta = {
   phases: [
     { title: 'Execute', detail: 'local runs within the configured time limits (skipped for analyze-only items)' },
     { title: 'Analyze', detail: 'seed statistics, rule decision, draft verdict' },
-    { title: 'Audit', detail: 'adversarial check of the conclusion (revisor)' },
+    { title: 'Audit', detail: 'adversarial check of the conclusion (co-scientist-critic)' },
     { title: 'Record', detail: 'write the final verdict file' },
   ],
 }
@@ -21,6 +21,8 @@ const T = Object.assign(
   CFG.tests || {},
 )
 const MODELS = CFG.models || {}
+// Subagent shipped in agents/ and installed by install.sh.
+const CRITIC_AGENT = 'co-scientist-critic'
 const LANG = CFG.language === 'pt' ? 'Brazilian Portuguese' : 'English'
 const ENV = args.env || {}
 
@@ -107,7 +109,7 @@ async function audit(x) {
       'Look for: evaluation bugs (wrong split, metric computed wrongly, test data used for any choice), leakage, seeds that did not change anything, failed or missing seeds, deviations from the pre-registered plan, an untuned or unfair control, effects within seed noise, and claims in result.md beyond what the numbers show.',
       'Set downgrade to true if any issue makes a supported or refuted verdict unreliable; the verdict then becomes inconclusive. You cannot upgrade a verdict. Write the field contents in English.',
     ].join('\n'),
-    { label: `audit:${x.id}`, phase: 'Audit', schema: AUDIT_SCHEMA, agentType: 'revisor' },
+    { label: `audit:${x.id}`, phase: 'Audit', schema: AUDIT_SCHEMA, agentType: CRITIC_AGENT },
   )
   return Object.assign({}, x, { audit: a })
 }
