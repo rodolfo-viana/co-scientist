@@ -16,7 +16,8 @@ reviews/H003.initial.json   quick triage
 reviews/H003.md|.json       full review
 literature/<key>.json       one record per source actually retrieved
 matches/M0007-ab.json       one judged game (ab = scheduled order, ba = swapped)
-rounds/R01/dedup.json       duplicate clusters of round 1
+rounds/R01/dedup.json       duplicate clusters of round 1 (generated and user hypotheses)
+rounds/R01/dedup-evolved.json  duplicate clusters among the evolved hypotheses of round 1
 tests/H003/...              pre-registered test, code, results and verdict
 ```
 
@@ -109,7 +110,7 @@ exists, reuse it.
 `first` is the hypothesis you were shown as Hypothesis 1. `winner` must be
 `first` or `second`.
 
-## rounds/R01/dedup.json
+## rounds/R01/dedup.json and dedup-evolved.json
 
 ```json
 {"round": 1, "clusters": [{"keep": "H002", "drop": ["H006"], "reason": "same mechanism and same test"}]}

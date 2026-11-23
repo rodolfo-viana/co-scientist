@@ -21,6 +21,8 @@ import json
 import math
 import re
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -203,7 +205,7 @@ def load_reviews(
 
 def load_duplicates(run: Path, problems: Problems) -> dict[str, str]:
     dropped: dict[str, str] = {}
-    for path in sorted((run / "rounds").glob("R*/dedup.json")):
+    for path in sorted((run / "rounds").glob("R*/dedup*.json")):
         data = _read(path, problems)
         if not isinstance(data, dict):
             continue
@@ -347,6 +349,22 @@ def _fetch(url: str, timeout: float = 15.0) -> bytes:
         return response.read()
 
 
+def _get(url: str, attempts: int = 3, backoff: float = 2.0) -> bytes:
+    """Call _fetch, retrying rate limits, server errors and timeouts."""
+    for attempt in range(attempts):
+        try:
+            return _fetch(url)
+        except urllib.error.HTTPError as exc:
+            retryable = exc.code == 429 or exc.code >= 500
+            if not retryable or attempt == attempts - 1:
+                raise
+        except (TimeoutError, urllib.error.URLError):
+            if attempt == attempts - 1:
+                raise
+        time.sleep(backoff * (attempt + 1))
+    raise RuntimeError("unreachable")
+
+
 def _openalex_record(ids: dict[str, Any]) -> tuple[str, str] | None:
     if ids.get("openalex"):
         work = str(ids["openalex"]).rstrip("/").rsplit("/", 1)[-1]
@@ -356,7 +374,7 @@ def _openalex_record(ids: dict[str, Any]) -> tuple[str, str] | None:
         url = f"https://api.openalex.org/works/doi:{urllib.parse.quote(doi, safe='/')}"
     else:
         return None
-    data = json.loads(_fetch(url))
+    data = json.loads(_get(url))
     inverted = data.get("abstract_inverted_index") or {}
     positions = sorted((pos, word) for word, poss in inverted.items() for pos in poss)
     abstract = " ".join(word for _, word in positions)
@@ -365,7 +383,7 @@ def _openalex_record(ids: dict[str, Any]) -> tuple[str, str] | None:
 
 def _arxiv_record(arxiv_id: str) -> tuple[str, str] | None:
     query = urllib.parse.urlencode({"id_list": arxiv_id})
-    root = ET.fromstring(_fetch(f"https://export.arxiv.org/api/query?{query}"))
+    root = ET.fromstring(_get(f"https://export.arxiv.org/api/query?{query}"))
     ns = {"a": "http://www.w3.org/2005/Atom"}
     entry = root.find("a:entry", ns)
     if entry is None:
@@ -428,6 +446,8 @@ def check_citation(
             out["online"] = "unavailable"
         elif "error" in fetched:
             out["online"] = f"error: {fetched['error']}"
+        elif not str(fetched.get("abstract", "")).strip():
+            out["online"] = "unavailable (no abstract online)"
         else:
             title_ratio = difflib.SequenceMatcher(
                 None, normalize_text(fetched["title"]), normalize_text(str(record.get("title", "")))

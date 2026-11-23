@@ -155,8 +155,18 @@ One data point, from the smoke run of 2026-11-23 with Sonnet in every role
 | Prepare one test | 4 | 0.38 M | 21 min |
 | Run, analyze and audit one test | 4 | 0.37 M | 6 min |
 
-The default configuration uses Opus with xhigh effort and about three times
-as many calls per round, so expect several times these numbers.
+First real run, 2026-11-23, default configuration (Opus xhigh), goal "weight
+editing of trained 2D U-Nets" (run
+`~/co-scientist-runs/20261123-0928-weight-editing-medseg`):
+
+| Stage | Agent calls | Subagent tokens | Wall time |
+|---|---|---|---|
+| Ideation, config `{6, 3, 3, 2}` | 63 | 8.55 M | 67 min |
+
+`snippet-not-in-source` from `--online` can be a different version of the
+abstract, not a fabricated one: Lacuna serves the OpenReview abstract, while
+OpenAlex and arXiv serve the arXiv one. Check the source the record names in
+`retrieved_with` before calling a citation wrong.
 
 ## Rules
 

@@ -7,6 +7,7 @@ export const meta = {
     { title: 'Deduplicate', detail: 'one proximity agent over the pool' },
     { title: 'Tournament', detail: 'Swiss rounds; each match is judged in both presentation orders' },
     { title: 'Evolve and review', detail: 'new hypotheses built from the top of the ranking' },
+    { title: 'Deduplicate (evolved)', detail: 'one proximity agent checks the evolved hypotheses against the pool' },
     { title: 'Tournament (evolved)', detail: 'Swiss rounds including the evolved hypotheses' },
     { title: 'Meta-review', detail: 'feedback for the next round and the research overview' },
   ],
@@ -239,6 +240,41 @@ function settle(results, items) {
   return ok
 }
 
+// One proximity agent over the active pool plus the new hypotheses. Only the
+// new ones may be dropped. Returns the new hypotheses that were kept.
+async function deduplicate(newHyps, label, file, phaseTitle) {
+  const pool = [...active, ...newHyps.map((h) => h.id)]
+  if (newHyps.length === 0 || pool.length < 3) {
+    log(`${label}: skipped (pool smaller than three or nothing new)`)
+    return newHyps
+  }
+  const newIds = new Set(newHyps.map((h) => h.id))
+  const d = await agent(
+    task('deduplicator', [
+      `Task: find duplicates in round ${RLABEL}.`,
+      'Pool (read each hypotheses/<id>.md):',
+      pool.map((id) => `- ${id}: ${titles[id] || ''}`).join('\n'),
+      `New this round (only these may be dropped): ${[...newIds].join(', ')}`,
+      `Write ${file} with "round": ${ROUND}.`,
+    ]),
+    opts('deduplicator', label, phaseTitle, DEDUP_SCHEMA),
+  )
+  if (!d || !Array.isArray(d.clusters)) {
+    log(`${label}: failed, all new hypotheses kept`)
+    return newHyps
+  }
+  const dropped = new Set()
+  for (const c of d.clusters) {
+    for (const x of c.drop || []) {
+      if (newIds.has(x) && x !== c.keep && pool.includes(c.keep) && !dropped.has(x)) {
+        dropped.add(x)
+        duplicates.push({ id: x, of: c.keep })
+      }
+    }
+  }
+  return newHyps.filter((h) => !dropped.has(h.id))
+}
+
 function pairKey(a, b) {
   return a < b ? `${a}|${b}` : `${b}|${a}`
 }
@@ -344,7 +380,7 @@ async function tournament(nRounds, phaseTitle, swissOffset) {
 const estimate =
   (P.n_generate + (PRIOR.unreviewed || []).length) * 3 + 1 +
   P.swiss_rounds * (active.size + P.n_generate) +
-  P.n_evolve * 3 +
+  P.n_evolve * 3 + 1 +
   P.evolved_swiss_rounds * (active.size + P.n_generate + P.n_evolve) + 1
 log(`Round ${ROUND}: about ${estimate} agent calls (upper bound); ${active.size} hypotheses carried over`)
 
@@ -365,34 +401,7 @@ const fresh = settle(generated, genItems)
 log(`Generated or reviewed ${genItems.length}: ${fresh.length} passed, ${rejected.length} rejected, ${failures.length} failed`)
 
 phase('Deduplicate')
-const pool = [...active, ...fresh.map((h) => h.id)]
-let kept = fresh
-if (fresh.length > 0 && pool.length >= 3) {
-  const freshIds = new Set(fresh.map((h) => h.id))
-  const d = await agent(
-    task('deduplicator', [
-      `Task: find duplicates in round ${RLABEL}.`,
-      'Pool (read each hypotheses/<id>.md):',
-      pool.map((id) => `- ${id}: ${titles[id] || ''}`).join('\n'),
-      `New this round (only these may be dropped): ${[...freshIds].join(', ')}`,
-      `Write rounds/${RLABEL}/dedup.json with "round": ${ROUND}.`,
-    ]),
-    opts('deduplicator', `dedup:${RLABEL}`, 'Deduplicate', DEDUP_SCHEMA),
-  )
-  if (d && Array.isArray(d.clusters)) {
-    for (const c of d.clusters) {
-      for (const x of c.drop || []) {
-        if (freshIds.has(x) && x !== c.keep && pool.includes(c.keep)) duplicates.push({ id: x, of: c.keep })
-      }
-    }
-  } else {
-    log('Deduplication failed: all new hypotheses kept')
-  }
-  const dropped = new Set(duplicates.map((x) => x.id))
-  kept = fresh.filter((h) => !dropped.has(h.id))
-} else {
-  log('Deduplication skipped (pool smaller than three or nothing new)')
-}
+const kept = await deduplicate(fresh, `dedup:${RLABEL}`, `rounds/${RLABEL}/dedup.json`, 'Deduplicate')
 for (const h of kept) {
   active.add(h.id)
   ratings[h.id] = P.elo_init
@@ -420,13 +429,21 @@ if (P.n_evolve > 0 && active.size > 0) {
     (h) => initialReview(h, PH2),
     (h) => fullReview(h, PH2),
   )
-  for (const h of settle(evolvedResults, evoItems)) {
+  const evolved = settle(evolvedResults, evoItems)
+  for (const h of evolved) evolvedIds.push(h.id)
+  phase('Deduplicate (evolved)')
+  const evolvedKept = await deduplicate(
+    evolved,
+    `dedup:${RLABEL}-evolved`,
+    `rounds/${RLABEL}/dedup-evolved.json`,
+    'Deduplicate (evolved)',
+  )
+  for (const h of evolvedKept) {
     active.add(h.id)
     ratings[h.id] = P.elo_init
-    evolvedIds.push(h.id)
   }
-  log(`Evolved ${evoItems.length}: ${evolvedIds.length} entered the tournament`)
-  if (evolvedIds.length > 0) {
+  log(`Evolved ${evoItems.length}: ${evolvedKept.length} entered the tournament`)
+  if (evolvedKept.length > 0) {
     phase('Tournament (evolved)')
     await tournament(P.evolved_swiss_rounds, 'Tournament (evolved)', P.swiss_rounds)
   }

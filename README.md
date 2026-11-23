@@ -10,8 +10,8 @@ procedure and `NOTICE` for attribution.
    strategies, an initial triage, a full review with literature search and
    assumption checks, deduplication, a Swiss-system Elo tournament in which
    every match is judged twice with the presentation order swapped, evolution
-   of the top hypotheses, a second tournament, and a meta-review that feeds
-   the next round.
+   of the top hypotheses, a second deduplication pass over the evolved ones,
+   a second tournament, and a meta-review that feeds the next round.
 2. Test preparation (`workflows/prepare_tests.js`): a pre-registered plan per
    hypothesis, an adversarial critique by the `revisor` agent with one
    revision, then code, a launch script and a smoke run.

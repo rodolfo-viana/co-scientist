@@ -81,8 +81,13 @@ async function fakeAgent(prompt, opts) {
     }
     case 'dedup': {
       const newIds = prompt.match(/only these may be dropped\): (.*)/)[1].split(', ')
-      const clusters = newIds.includes('H004') ? [{ keep: 'H001', drop: ['H004'], reason: 'same' }] : []
-      write(`rounds/${rest}/dedup.json`, { round, clusters })
+      const file = prompt.match(/Write (rounds\/R\d+\/dedup[a-z-]*\.json)/)[1]
+      assert.equal(file, rest.endsWith('-evolved') ? `rounds/${rest.slice(0, -8)}/dedup-evolved.json` : `rounds/${rest}/dedup.json`)
+      // H004 duplicates H001 at generation; the evolved H008 duplicates H001 in the second pass.
+      const clusters = []
+      if (newIds.includes('H004')) clusters.push({ keep: 'H001', drop: ['H004'], reason: 'same' })
+      if (newIds.includes('H008')) clusters.push({ keep: 'H001', drop: ['H008'], reason: 'same primary as its parent' })
+      write(file, { round, clusters })
       return { clusters }
     }
     case 'judge': {
@@ -221,6 +226,9 @@ for (const round of [1, 2]) {
 }
 const state = read('state.json')
 assert.equal(state.hypotheses.find((h) => h.id === 'H004').status, 'duplicate')
+assert.equal(state.hypotheses.find((h) => h.id === 'H008').status, 'duplicate')
+assert.ok(calls.includes('dedup:R01-evolved') && calls.includes('dedup:R02-evolved'))
+assert.ok(!fs.readdirSync(path.join(RUN, 'matches')).some((f) => read(`matches/${f}`).first === 'H008' || read(`matches/${f}`).second === 'H008'))
 assert.equal(state.hypotheses.find((h) => h.id === 'H002').status, 'rejected-initial')
 assert.equal(state.hypotheses.find((h) => h.id === 'H003').status, 'rejected')
 

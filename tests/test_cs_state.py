@@ -202,3 +202,45 @@ def test_online_check_uses_openalex_and_caches(run: Path, monkeypatch):
     cs_state.build_state(run, online=True)
     assert len(calls) == 1  # second run reads the cache
     assert calls[0].endswith("/works/W1")
+
+
+def test_online_check_empty_abstract_is_unavailable(run: Path, monkeypatch):
+    monkeypatch.setattr(cs_state, "_fetch", lambda url, timeout=15.0: json.dumps({"title": "A paper"}).encode())
+    write(
+        run / "literature" / "doi-10.1_x.json",
+        {"key": "doi-10.1_x", "title": "A paper", "abstract": "We show things", "ids": {"doi": "10.1/x"}},
+    )
+    add_hyp(run, "H001", citations=[{"key": "doi-10.1_x", "claim": "c", "snippet": "We show things"}])
+    state = cs_state.build_state(run, online=True)
+    assert state["citations"][0]["online"] == "unavailable (no abstract online)"
+
+
+def test_get_retries_rate_limit_then_succeeds(monkeypatch):
+    import urllib.error
+
+    attempts = []
+
+    def flaky(url, timeout=15.0):
+        attempts.append(url)
+        if len(attempts) == 1:
+            raise urllib.error.HTTPError(url, 429, "Too Many Requests", None, None)
+        return b"ok"
+
+    monkeypatch.setattr(cs_state, "_fetch", flaky)
+    monkeypatch.setattr(cs_state.time, "sleep", lambda s: None)
+    assert cs_state._get("https://example.org") == b"ok" and len(attempts) == 2
+    monkeypatch.setattr(
+        cs_state, "_fetch", lambda url, timeout=15.0: (_ for _ in ()).throw(urllib.error.HTTPError(url, 404, "x", None, None))
+    )
+    with pytest.raises(urllib.error.HTTPError):
+        cs_state._get("https://example.org")
+
+
+def test_evolved_dedup_file_marks_duplicates(run: Path):
+    for hid in ("H001", "H002", "H003"):
+        add_hyp(run, hid)
+        add_reviews(run, hid)
+    write(run / "rounds" / "R01" / "dedup.json", {"round": 1, "clusters": []})
+    write(run / "rounds" / "R01" / "dedup-evolved.json", {"round": 1, "clusters": [{"keep": "H001", "drop": ["H003"]}]})
+    status = {h["id"]: h["status"] for h in cs_state.build_state(run)["hypotheses"]}
+    assert status == {"H001": "active", "H002": "active", "H003": "duplicate"}
