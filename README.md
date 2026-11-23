@@ -167,3 +167,8 @@ The first command needs `pytest`. The second runs the three workflows with
 fake agents that write the same files real agents write, and checks that the
 ratings computed by the workflow match the ones rebuilt from the files. No
 model is called.
+
+## License
+
+Apache License 2.0, see `LICENSE`. Material adapted from OpenScientist is
+also under the Apache License 2.0; `NOTICE` lists what was adapted and how.
